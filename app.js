@@ -7,10 +7,19 @@ const V = document.getElementById('view'), NAV = document.getElementById('nav');
 const TABS = [['dashboard','📊 Dashboard'],['capture','⚡ Capture'],['journalists','📰 Journalists'],['clients','💼 Clients'],['campaigns','🎯 Campaigns'],['coverage','📎 Coverage'],['import','📥 Import'],['reports','📄 Reports'],['portfolio','🏆 Portfolio'],['jportal','🎙️ J-Portal']];
 let TAB = 'dashboard';
 async function api(path, method='GET', body) {
-  const r = await fetch(baseApi() + path, { method, headers: { 'Content-Type': 'application/json', ...(TOK ? { Authorization: 'Bearer ' + TOK } : {}) }, ...(body ? { body: JSON.stringify(body) } : {}) });
+  let r;
+  try { r = await fetch(baseApi() + path, { method, headers: { 'Content-Type': 'application/json', ...(TOK ? { Authorization: 'Bearer ' + TOK } : {}) }, ...(body ? { body: JSON.stringify(body) } : {}) }); }
+  catch { throw new Error('Cannot reach backend at ' + (baseApi() || 'this site') + ' — set the Backend URL below.'); }
   const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
+  if (!r.ok) {
+    if (r.status === 404 && !j.error) throw new Error('Backend not found at ' + (baseApi() || 'this site') + ' (HTTP 404) — the API lives on your AWS host. Set the Backend URL below.');
+    throw new Error(j.error || ('HTTP ' + r.status));
+  }
   return j;
+}
+async function backendOk() {
+  try { await api('/api/health'); return true; }
+  catch (e) { document.getElementById('a_err').textContent = e.message; return false; }
 }
 const esc = (s) => (s ?? '').toString().replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 function toast(msg, bad) {
@@ -24,10 +33,11 @@ async function boot() {
   if (!TOK) return showAuth();
   try { const j = await api('/api/me'); ME = j.user; showApp(); } catch { showAuth(); }
 }
-function showAuth() { document.getElementById('auth').classList.remove('hidden'); document.getElementById('app').classList.add('hidden'); }
+function showAuth() { document.getElementById('auth').classList.remove('hidden'); document.getElementById('app').classList.add('hidden'); const b = document.getElementById('a_backend'); if (b && !b.value) b.value = window.TIDINGS_API || localStorage.getItem('tidings_api') || ''; }
 function showApp() { document.getElementById('auth').classList.add('hidden'); document.getElementById('app').classList.remove('hidden'); document.getElementById('who').textContent = ME.name + ' · ' + ME.role; nav(); render(); }
-document.getElementById('loginBtn').onclick = async () => { try { const j = await api('/api/auth/login','POST',{email:val('a_email'),password:val('a_pass')}); TOK=j.token; localStorage.setItem('tidings_tok',TOK); ME=j.user; showApp(); } catch(e){ err(e);} };
-document.getElementById('regBtn').onclick = async () => { try { const j = await api('/api/auth/register','POST',{name:val('a_name'),email:val('a_email'),password:val('a_pass'),role:val('a_role')}); TOK=j.token; localStorage.setItem('tidings_tok',TOK); ME=j.user; showApp(); } catch(e){ err(e);} };
+function saveBackend() { const b = document.getElementById('a_backend'); if (b) localStorage.setItem('tidings_api', b.value.trim()); }
+document.getElementById('loginBtn').onclick = async () => { saveBackend(); if (!(await backendOk())) return; try { const j = await api('/api/auth/login','POST',{email:val('a_email'),password:val('a_pass')}); TOK=j.token; localStorage.setItem('tidings_tok',TOK); ME=j.user; showApp(); } catch(e){ err(e);} };
+document.getElementById('regBtn').onclick = async () => { saveBackend(); if (!(await backendOk())) return; try { const j = await api('/api/auth/register','POST',{name:val('a_name'),email:val('a_email'),password:val('a_pass'),role:val('a_role')}); TOK=j.token; localStorage.setItem('tidings_tok',TOK); ME=j.user; showApp(); } catch(e){ err(e);} };
 document.getElementById('logoutBtn').onclick = async () => { try { await api('/api/auth/logout', 'POST'); } catch {} TOK = ''; localStorage.removeItem('tidings_tok'); showAuth(); };
 document.addEventListener('keydown', (e) => { if (e.altKey && (e.key === 'q' || e.key === 'Q')) { TAB = 'capture'; nav(); render(); setTimeout(() => document.getElementById('c_s')?.focus(), 400); } });
 function err(e){ document.getElementById('a_err').textContent = e.message; alert(e.message); }
