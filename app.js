@@ -9,10 +9,10 @@ let TAB = 'dashboard';
 async function api(path, method='GET', body) {
   let r;
   try { r = await fetch(baseApi() + path, { method, headers: { 'Content-Type': 'application/json', ...(TOK ? { Authorization: 'Bearer ' + TOK } : {}) }, ...(body ? { body: JSON.stringify(body) } : {}) }); }
-  catch { throw new Error('Cannot reach backend at ' + (baseApi() || 'this site') + ' — set the Backend URL below.'); }
+  catch { throw new Error('Cannot reach the Tidings service — please check your connection and try again.'); }
   const j = await r.json().catch(() => ({}));
   if (!r.ok) {
-    if (r.status === 404 && !j.error) throw new Error('Backend not found at ' + (baseApi() || 'this site') + ' (HTTP 404) — the API lives on your AWS host. Set the Backend URL below.');
+    if (r.status === 404 && !j.error) throw new Error('Service request not found (HTTP 404) — please try again.');
     throw new Error(j.error || ('HTTP ' + r.status));
   }
   return j;
@@ -33,11 +33,10 @@ async function boot() {
   if (!TOK) return showAuth();
   try { const j = await api('/api/me'); ME = j.user; showApp(); } catch { showAuth(); }
 }
-function showAuth() { document.getElementById('auth').classList.remove('hidden'); document.getElementById('app').classList.add('hidden'); const b = document.getElementById('a_backend'); if (b && !b.value) b.value = window.TIDINGS_API || localStorage.getItem('tidings_api') || ''; }
+function showAuth() { document.getElementById('auth').classList.remove('hidden'); document.getElementById('app').classList.add('hidden'); }
 function showApp() { document.getElementById('auth').classList.add('hidden'); document.getElementById('app').classList.remove('hidden'); document.getElementById('who').textContent = ME.name + ' · ' + ME.role; nav(); render(); }
-function saveBackend() { const b = document.getElementById('a_backend'); if (b) localStorage.setItem('tidings_api', b.value.trim()); }
-document.getElementById('loginBtn').onclick = async () => { saveBackend(); if (!(await backendOk())) return; try { const j = await api('/api/auth/login','POST',{email:val('a_email'),password:val('a_pass')}); TOK=j.token; localStorage.setItem('tidings_tok',TOK); ME=j.user; showApp(); } catch(e){ err(e);} };
-document.getElementById('regBtn').onclick = async () => { saveBackend(); if (!(await backendOk())) return; try { const j = await api('/api/auth/register','POST',{name:val('a_name'),email:val('a_email'),password:val('a_pass'),role:val('a_role')}); TOK=j.token; localStorage.setItem('tidings_tok',TOK); ME=j.user; showApp(); } catch(e){ err(e);} };
+document.getElementById('loginBtn').onclick = async () => { if (!(await backendOk())) return; try { const j = await api('/api/auth/login','POST',{email:val('a_email'),password:val('a_pass')}); TOK=j.token; localStorage.setItem('tidings_tok',TOK); ME=j.user; showApp(); } catch(e){ err(e);} };
+document.getElementById('regBtn').onclick = async () => { if (!(await backendOk())) return; try { const j = await api('/api/auth/register','POST',{name:val('a_name'),email:val('a_email'),password:val('a_pass'),role:val('a_role')}); TOK=j.token; localStorage.setItem('tidings_tok',TOK); ME=j.user; showApp(); } catch(e){ err(e);} };
 document.getElementById('logoutBtn').onclick = async () => { try { await api('/api/auth/logout', 'POST'); } catch {} TOK = ''; localStorage.removeItem('tidings_tok'); showAuth(); };
 document.addEventListener('keydown', (e) => { if (e.altKey && (e.key === 'q' || e.key === 'Q')) { TAB = 'capture'; nav(); render(); setTimeout(() => document.getElementById('c_s')?.focus(), 400); } });
 function err(e){ document.getElementById('a_err').textContent = e.message; alert(e.message); }
@@ -213,13 +212,12 @@ async function vPort() {
   const [s, cs, st, tm] = await Promise.all([api('/api/portfolio/summary'), api('/api/portfolio/case-studies'), api('/api/portfolio/settings'), api('/api/portfolio/testimonials')]);
   V.innerHTML = `<h2>Portfolio generator — results-led, always current</h2>
   <div class="grid2"><div class="card"><h3>Career summary</h3><div class="kpi">${s.totals.campaigns} campaigns · ${s.totals.placements} placements · ${s.totals.reach.toLocaleString()} reach</div><ul>${s.bullets.map(b=>`<li>${esc(b)}</li>`).join('')}</ul><p class="mut">CV-ready bullets — copy into CV/profile.</p></div>
-  <div class="card"><h3>Share</h3><p>Public link: <a id="pubLink" href="#" target="_blank"></a> <span class="badge b-ver">verified data</span></p><div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn" id="pdf">Download PDF (print)</button><button class="btn dark" id="cv">Copy CV bullets</button><button class="btn dark" id="op">One-page summary</button></div><div id="opv"></div><label>Headline</label><input id="p_h" value="${esc(st.settings.headline||'')}"><label>Bio</label><textarea id="p_b">${esc(st.settings.bio||'')}</textarea><button class="btn dark" id="p_s">Save</button> <button class="btn ghost" style="color:#000;border:1px solid #ccc" id="apiSet">Backend URL</button></div></div>
+  <div class="card"><h3>Share</h3><p>Public link: <a id="pubLink" href="#" target="_blank"></a> <span class="badge b-ver">verified data</span></p><div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn" id="pdf">Download PDF (print)</button><button class="btn dark" id="cv">Copy CV bullets</button><button class="btn dark" id="op">One-page summary</button></div><div id="opv"></div><label>Headline</label><input id="p_h" value="${esc(st.settings.headline||'')}"><label>Bio</label><textarea id="p_b">${esc(st.settings.bio||'')}</textarea><button class="btn dark" id="p_s">Save</button></div></div>
   <h3>Case studies (auto-drafted on campaign close — review before publish)</h3>
   ${cs.caseStudies.map(c=>`<div class="card"><h4>${esc(c.title)} <span class="badge b-draft">${esc(c.status)} / signoff:${esc(c.client_signoff)}</span> ${c.anonymised?'<span class="badge b-bad">anonymised</span>':''}</h4><p><b>Challenge:</b> ${esc(c.challenge)}</p><p><b>Approach:</b> ${esc(c.approach)}</p><p><b>Results:</b> ${esc(c.results)} <span class="mut">✔ verified from tracked data</span></p><p class="mut">Client sign-off link (no login): <code>/api/portfolio/signoff/${c.id}</code></p><div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn ok" data-ap="${c.id}">Approve & publish</button><button class="btn dark" data-an="${c.id}">Anonymise</button><button class="btn ghost" style="color:#000;border:1px solid #ccc" data-tr="${c.id}">Request testimonial</button></div></div>`).join('')||'<p class="mut">Close a campaign to auto-draft a case study.</p>'}
   <div class="card"><h3>Testimonials</h3>${tm.testimonials.map(t=>`<div>💬 “${esc(t.message||'(requested — '+esc(t.request_sent_to)+')')}” — <b>${esc(t.author)}</b> <span class="mut">${esc(t.status)}</span></div>`).join('')||'<p class="mut">None.</p>'}</div>`;
   document.getElementById('p_s').onclick=async()=>{ await api('/api/portfolio/settings','PUT',{headline:val('p_h'),bio:val('p_b')}); toast('Saved'); };
   { const pl = document.getElementById('pubLink'); const abs = baseApi() + st.publicUrl; pl.href = abs || st.publicUrl; pl.textContent = pl.href; }
-  document.getElementById('apiSet').onclick = () => { const cur = localStorage.getItem('tidings_api') || window.TIDINGS_API || ''; const v = prompt('Backend API URL (empty = same origin):', cur); if (v === null) return; localStorage.setItem('tidings_api', v.trim()); toast('Backend set — reloading'); setTimeout(() => location.reload(), 600); };
   document.getElementById('pdf').onclick=()=>window.print();
   document.getElementById('cv').onclick=async()=>{ try{ await navigator.clipboard.writeText(s.bullets.join('\n')); toast('CV bullets copied ✓'); }catch{ toast(s.bullets.join('\n')); } };
   document.getElementById('op').onclick = async () => { const o = await api('/api/portfolio/one-pager'); document.getElementById('opv').innerHTML = `<hr><h4>One-page results summary <span class="badge b-ver">✔ verified</span></h4><p><b>${esc(o.name)}</b> · ${esc(o.headline)}</p><p class="mut">${esc(o.bio)}</p><p>${o.totals.campaigns} campaigns · ${o.totals.placements} placements · ~${o.totals.reach.toLocaleString()} reach</p><ul>${o.highlights.map(h => `<li>${esc(h.title)} — ${esc(h.outlet)} (${h.reach})</li>`).join('')}</ul><button class="btn" onclick="window.print()">Print / save PDF</button>`; };
