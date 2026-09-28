@@ -1,7 +1,7 @@
 {
   "name": "tidings-frontend",
   "version": "1.0.0",
-  "description": "Tidings public SPA — PR relationships and reporting platform by Swell PR & Communications",
+  "description": "Tidings public SPA - PR relationships and reporting platform",
   "scripts": {
     "serve": "npx serve ."
   },
