@@ -6,11 +6,15 @@ let ME = null;
 const V = document.getElementById('view'), NAV = document.getElementById('nav');
 const TABS = [['dashboard','📊 Dashboard'],['capture','⚡ Capture'],['journalists','📰 Journalists'],['clients','💼 Clients'],['campaigns','🎯 Campaigns'],['coverage','📎 Coverage'],['import','📥 Import'],['reports','📄 Reports'],['portfolio','🏆 Portfolio'],['jportal','🎙️ J-Portal']];
 let TAB = 'dashboard';
-async function api(path, method='GET', body) {
+async function api(path, method='GET', body, _retried) {
   let r;
   try { r = await fetch(baseApi() + path, { method, headers: { 'Content-Type': 'application/json', ...(TOK ? { Authorization: 'Bearer ' + TOK } : {}) }, ...(body ? { body: JSON.stringify(body) } : {}) }); }
   catch { throw new Error('Cannot reach the Tidings service — please check your connection and try again.'); }
   const j = await r.json().catch(() => ({}));
+  if (r.status === 409 && !_retried && /conflict/i.test(j.error || '')) {
+    await new Promise((x) => setTimeout(x, 900)); // concurrent save conflict — one automatic retry
+    return api(path, method, body, true);
+  }
   if (!r.ok) {
     if (r.status === 404 && !j.error) throw new Error('Service request not found (HTTP 404) — please try again.');
     throw new Error(j.error || ('HTTP ' + r.status));
@@ -39,7 +43,7 @@ document.getElementById('loginBtn').onclick = async () => { if (!(await backendO
 document.getElementById('regBtn').onclick = async () => { if (!(await backendOk())) return; try { const j = await api('/api/auth/register','POST',{name:val('a_name'),email:val('a_email'),password:val('a_pass'),role:val('a_role')}); TOK=j.token; localStorage.setItem('tidings_tok',TOK); ME=j.user; showApp(); } catch(e){ err(e);} };
 document.getElementById('logoutBtn').onclick = async () => { try { await api('/api/auth/logout', 'POST'); } catch {} TOK = ''; localStorage.removeItem('tidings_tok'); showAuth(); };
 document.addEventListener('keydown', (e) => { if (e.altKey && (e.key === 'q' || e.key === 'Q')) { TAB = 'capture'; nav(); render(); setTimeout(() => document.getElementById('c_s')?.focus(), 400); } });
-function err(e){ document.getElementById('a_err').textContent = e.message; alert(e.message); }
+function err(e){ const el = document.getElementById('a_err'); if (el) el.textContent = e.message; }
 const val = (id) => document.getElementById(id)?.value;
 
 async function render(preset) {
@@ -168,7 +172,7 @@ async function vCov() {
   document.getElementById('cqs').onclick = async () => { const r = await api('/api/coverage?q=' + encodeURIComponent(document.getElementById('cq').value)); V.querySelector('table').innerHTML = '<tr><th>Title</th><th>Outlet</th><th>Reach</th><th>Sentiment</th></tr>' + r.coverage.map(c => `<tr><td>${esc(c.title)}</td><td>${esc(c.outlet)}</td><td>${c.reach}</td><td>${esc(c.sentiment)}</td></tr>`).join(''); };
   document.getElementById('up').onclick=async()=>{ try{ const r=await api('/api/coverage/parse-link','POST',{url:val('u')}); document.getElementById('t').value=r.parsed.title; document.getElementById('o').value=r.parsed.outlet; document.getElementById('um').textContent='Pulled ✓'; }catch(e){alert(e.message);} };
   document.getElementById('go').onclick=async()=>{ await api('/api/coverage','POST',{url:val('u'),title:val('t'),outlet:val('o'),pub_date:val('d'),reach:+val('r')||0,sentiment:val('s'),campaign_id:val('m'),client_id:val('cc'),key_message_pickup:val('k')}); render(); };
-  document.getElementById('expCsv').onclick = (e) => { e.preventDefault(); window.open(baseApi() + '/api/export/coverage.csv?token=' + encodeURIComponent(TOK), '_blank'); };
+  document.getElementById('expCsv').onclick = async (e) => { e.preventDefault(); try { const r = await fetch(baseApi() + '/api/export/coverage.csv', { headers: { Authorization: 'Bearer ' + TOK } }); if (!r.ok) throw new Error('Export failed'); const a = document.createElement('a'); a.href = URL.createObjectURL(await r.blob()); a.download = 'coverage.csv'; document.body.appendChild(a); a.click(); a.remove(); } catch (ex) { toast(ex.message, true); } };
 }
 
 // ---- import ----
