@@ -1,7 +1,7 @@
 {
-  "name": "tidings-frontend",
+  "name": "habaro-frontend",
   "version": "1.0.0",
-  "description": "Tidings public SPA - PR relationships and reporting platform",
+  "description": "Habaro public SPA - PR relationships and reporting platform",
   "scripts": {
     "serve": "npx serve ."
   },

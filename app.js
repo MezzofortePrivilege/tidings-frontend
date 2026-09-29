@@ -1,7 +1,7 @@
-// Tidings SPA — public frontend. Points at the private backend API.
-// Backend URL resolution: window.TIDINGS_API (config.js) > localStorage override > same-origin.
-function baseApi() { return ((window.TIDINGS_API || localStorage.getItem('tidings_api') || '').replace(/\/$/, '')); }
-let TOK = localStorage.getItem('tidings_tok') || '';
+// Habaro SPA — public frontend. Points at the private backend API.
+// Backend URL resolution: window.HABARO_API (config.js) > localStorage override > same-origin.
+function baseApi() { return ((window.HABARO_API || window.TIDINGS_API || localStorage.getItem('habaro_api') || localStorage.getItem('tidings_api') || '').replace(/\/$/, '')); }
+let TOK = localStorage.getItem('habaro_tok') || localStorage.getItem('tidings_tok') || '';
 let ME = null;
 const V = document.getElementById('view'), NAV = document.getElementById('nav');
 const TABS = [['dashboard','📊 Dashboard'],['capture','⚡ Capture'],['journalists','📰 Journalists'],['clients','💼 Clients'],['campaigns','🎯 Campaigns'],['coverage','📎 Coverage'],['import','📥 Import'],['reports','📄 Reports'],['portfolio','🏆 Portfolio'],['jportal','🎙️ J-Portal']];
@@ -9,7 +9,7 @@ let TAB = 'dashboard';
 async function api(path, method='GET', body, _retried) {
   let r;
   try { r = await fetch(baseApi() + path, { method, headers: { 'Content-Type': 'application/json', ...(TOK ? { Authorization: 'Bearer ' + TOK } : {}) }, ...(body ? { body: JSON.stringify(body) } : {}) }); }
-  catch { throw new Error('Cannot reach the Tidings service — please check your connection and try again.'); }
+  catch { throw new Error('Cannot reach the Habaro service — please check your connection and try again.'); }
   const j = await r.json().catch(() => ({}));
   if (r.status === 409 && !_retried && /conflict/i.test(j.error || '')) {
     await new Promise((x) => setTimeout(x, 900)); // concurrent save conflict — one automatic retry
@@ -39,9 +39,9 @@ async function boot() {
 }
 function showAuth() { document.getElementById('auth').classList.remove('hidden'); document.getElementById('app').classList.add('hidden'); }
 function showApp() { document.getElementById('auth').classList.add('hidden'); document.getElementById('app').classList.remove('hidden'); document.getElementById('who').textContent = ME.name + ' · ' + ME.role; nav(); render(); }
-document.getElementById('loginBtn').onclick = async () => { if (!(await backendOk())) return; try { const j = await api('/api/auth/login','POST',{email:val('a_email'),password:val('a_pass')}); TOK=j.token; localStorage.setItem('tidings_tok',TOK); ME=j.user; showApp(); } catch(e){ err(e);} };
-document.getElementById('regBtn').onclick = async () => { if (!(await backendOk())) return; try { const j = await api('/api/auth/register','POST',{name:val('a_name'),email:val('a_email'),password:val('a_pass'),role:val('a_role')}); TOK=j.token; localStorage.setItem('tidings_tok',TOK); ME=j.user; showApp(); } catch(e){ err(e);} };
-document.getElementById('logoutBtn').onclick = async () => { try { await api('/api/auth/logout', 'POST'); } catch {} TOK = ''; localStorage.removeItem('tidings_tok'); showAuth(); };
+document.getElementById('loginBtn').onclick = async () => { if (!(await backendOk())) return; try { const j = await api('/api/auth/login','POST',{email:val('a_email'),password:val('a_pass')}); TOK=j.token; localStorage.setItem('habaro_tok',TOK); localStorage.removeItem('tidings_tok'); ME=j.user; showApp(); } catch(e){ err(e);} };
+document.getElementById('regBtn').onclick = async () => { if (!(await backendOk())) return; try { const j = await api('/api/auth/register','POST',{name:val('a_name'),email:val('a_email'),password:val('a_pass'),role:val('a_role')}); TOK=j.token; localStorage.setItem('habaro_tok',TOK); localStorage.removeItem('tidings_tok'); ME=j.user; showApp(); } catch(e){ err(e);} };
+document.getElementById('logoutBtn').onclick = async () => { try { await api('/api/auth/logout', 'POST'); } catch {} TOK = ''; localStorage.removeItem('habaro_tok'); localStorage.removeItem('tidings_tok'); showAuth(); };
 document.addEventListener('keydown', (e) => { if (e.altKey && (e.key === 'q' || e.key === 'Q')) { TAB = 'capture'; nav(); render(); setTimeout(() => document.getElementById('c_s')?.focus(), 400); } });
 function err(e){ const el = document.getElementById('a_err'); if (el) el.textContent = e.message; }
 const val = (id) => document.getElementById(id)?.value;
@@ -89,7 +89,7 @@ async function vCapture() {
   <label>Subject</label><input id="c_s" placeholder="Pitch subject"><label>Body / notes</label><textarea id="c_b" rows="3"></textarea>
   <label>Outcome</label><select id="c_o"><option>sent</option><option>replied</option><option>covered</option><option>declined</option><option>no_response</option></select>
   <button class="btn" id="c_go">Log interaction</button> <span id="c_msg" class="mut"></span></div>
-  <div class="card"><h3>📧 Forwarded-email parse</h3><p class="mut">Forward/CC to <b>log@tidings.app</b>, then paste here. Parsed into pitch / reply / placement.</p>
+  <div class="card"><h3>📧 Forwarded-email parse</h3><p class="mut">Forward/CC to <b>log@habaro.app</b>, then paste here. Parsed into pitch / reply / placement.</p>
   <label>From</label><input id="e_f" placeholder="you@agency.co.za"><label>To</label><input id="e_t" placeholder="journalist@outlet.co.za"><label>Subject</label><input id="e_s"><label>Body</label><textarea id="e_b" rows="4"></textarea>
   <button class="btn dark" id="e_go">Parse (+ auto-log)</button><pre class="dump" id="e_out"></pre></div></div>
   <div class="card"><h3>💬 WhatsApp share / chat export</h3><p class="mut">WhatsApp can't be read automatically — paste a chat export. We extract participants, dates & counts.</p>
